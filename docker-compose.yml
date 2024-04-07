@@ -1,0 +1,33 @@
+
+version: '3.0'
+
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=${POSTGRESQL_USER}
+      - POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ./db/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+      - ./db/postgresql.conf:/usr/share/postgresql/postgresql.conf
+      - pgdata:/var/lib/postgresql/data
+  application:
+    container_name: application
+    hostname: application
+    environment:
+    build:
+      context: .
+    ports:
+      - ${AGGREGATOR_HOST_PORT}:${AGGREGATOR_PORT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
