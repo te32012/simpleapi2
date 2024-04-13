@@ -4,30 +4,36 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+type RedisClient interface {
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+}
+
 type Auth struct {
-	Base *redis.Client
+	Base   RedisClient
 	Logger *slog.Logger
 }
 
 func NewAuth(uri string, username, password string, logger *slog.Logger) *Auth {
 	rdb := redis.NewClient(&redis.Options{
-        Addr:     uri,
+		Addr:     uri,
 		Username: username,
-        Password: password, // no password set
-        DB:       0,  // use default DB
-    })
-	return &Auth{Base : rdb, Logger: logger}
+		Password: password, // no password set
+		DB:       0,        // use default DB
+	})
+	return &Auth{Base: rdb, Logger: logger}
 }
 
 func (a *Auth) HasPermission(s string, permission int) (bool, error) {
 	a.Logger.Info("Проверка токента %s на наличие доступа уровня %d", s, permission)
 	val, err := a.Base.Get(context.Background(), s).Int()
 	if err != nil {
-		a.Logger.Error("Токент %s не содержится в базе токентов",)
+		a.Logger.Error("Токент %s не содержится в базе токентов")
 		return false, errors.New("401")
 	}
 	if val == permission {

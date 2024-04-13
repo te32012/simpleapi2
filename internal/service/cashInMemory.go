@@ -23,6 +23,7 @@ type Lru struct {
 
 func (l *Lru) add(id int) {
 	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	nd, ok := l.storage[id]
 	if ok {
 		if nd != l.last {
@@ -43,6 +44,14 @@ func (l *Lru) add(id int) {
 		}
 	} else {
 		if l.l < 1100 {
+			if l.last == nil && l.head == nil {
+				nd := new(node)
+				nd.id = id
+				l.last = nd
+				l.head = nd
+				l.storage[id] = nd
+				return
+			}
 			nd := new(node)
 			nd.id = id
 			nd.previous = l.last
@@ -63,7 +72,6 @@ func (l *Lru) add(id int) {
 			l.storage[id] = nd
 		}
 	}
-	l.mutex.Unlock()
 }
 
 func (l *Lru) GetId() []int {
@@ -76,6 +84,10 @@ func (l *Lru) GetId() []int {
 	}
 	l.mutex.Unlock()
 	return ans
+}
+
+func newLru() *Lru {
+	return &Lru{storage: make(map[int]*node)}
 }
 
 // Кешированные ответы
@@ -112,6 +124,10 @@ type CashUsedMap struct {
 	MainBase     database.DatabaseInterface
 }
 
+func NewChashUsedMap(base database.DatabaseInterface) *CashUsedMap {
+	return &CashUsedMap{CashOne: &CashInMemory{}, CashTwo: &CashInMemory{}, NumberOfCash: 1, Lru: newLru(), MainBase: base}
+}
+
 func (c *CashUsedMap) GetShortByFutureIdAndTagId(tag_id int, future_id int) (bool, []byte) {
 	switch c.NumberOfCash {
 	case 1:
@@ -143,9 +159,12 @@ func (c *CashUsedMap) UpdateCash() {
 
 	switch c.NumberOfCash {
 	case 1:
+		tmp, err := c.MainBase.GetListBannersByListId(ids)
+		if err != nil {
+			return
+		}
 		c.CashTwo.FindById = sync.Map{}
 		c.CashTwo.FindIdByFeatureIdAndTagID = sync.Map{}
-		tmp := c.MainBase.GetListBannersByListId(ids)
 		for i := 0; i < len(tmp); i++ {
 			data, _ := easyjson.Marshal(tmp[i].Content)
 			c.CashTwo.FindById.Store(tmp[i].Id, data)
@@ -155,9 +174,12 @@ func (c *CashUsedMap) UpdateCash() {
 			}
 		}
 	case 2:
+		tmp, err := c.MainBase.GetListBannersByListId(ids)
+		if err != nil {
+			return
+		}
 		c.CashOne.FindById = sync.Map{}
 		c.CashOne.FindIdByFeatureIdAndTagID = sync.Map{}
-		tmp := c.MainBase.GetListBannersByListId(ids)
 		for i := 0; i < len(tmp); i++ {
 			data, _ := easyjson.Marshal(tmp[i].Content)
 			c.CashOne.FindById.Store(tmp[i].Id, data)

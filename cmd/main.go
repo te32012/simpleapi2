@@ -1,6 +1,7 @@
 package main
 
-//go:generate easyjson -all ./internal/entitys
-func main() {
+import "avitotestgo2024/internal/application"
 
+func main() {
+	application.Run()
 }

@@ -2,32 +2,90 @@
 version: '3.0'
 
 services:
+  redis: 
+    container_name: redis
+    hostname: redis
+    image: redis:latest
+    restart: always
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+        REDIS_USERNAME=${REDIS_USERNAME}
+        REDIS_DISABLE_DEFAULT_USER="true"
+    volumes:
+      - redis:/var/lib/redis
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+    
   postgres:
     container_name: postgres
     image: postgres:latest
+    restart: always
     environment:
       - POSTGRES_USER=${POSTGRESQL_USER}
       - POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready" ]
-      interval: 10s
+      interval: 3s
       timeout: 3s
       retries: 5
     volumes:
-      - ./db/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
-      - ./db/postgresql.conf:/usr/share/postgresql/postgresql.conf
+      - ./config/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+      - ./config/postgresql.conf:/usr/share/postgresql/postgresql.conf
       - pgdata:/var/lib/postgresql/data
   application:
     container_name: application
     hostname: application
+    restart: always
     environment:
+      - POSTGRESQL_USER=${POSTGRESQL_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRESQL_HOST=postgres
+      - POSTGRESQL_PORT=${POSTGRESQL_PORT}
+      - POSTGRESQL_BASE=root
     build:
       context: .
     ports:
-      - ${AGGREGATOR_HOST_PORT}:${AGGREGATOR_PORT}
+      - ${APPLICATION_HOST_PORT}:${APPLICATION_PORT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "application:2024/ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+  tests:
+    container_name: runs_tests
+    hostname: runs_tests
+    build:
+      context: .
+      dockerfile: ./internal/application/dockerfile
+    depends_on:
+      application:
+        condition: service_healthy
+  pgadm:
+    container_name: pgadmin4_container
+    image: dpage/pgadmin4:7
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:5050"
+      - "80:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   pgdata:
+  redis:
+  pgadmin-data:

@@ -11,12 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 type Server struct {
-	Router *gin.Engine
+	Router  *gin.Engine
 	Service service.ServiceInterface
-	Auth auth.AuthInterface
-	Logger *slog.Logger
+	Auth    auth.AuthInterface
+	Logger  *slog.Logger
+	adres   string
 }
 
 func NewServer(host string, port string, auth auth.AuthInterface, service service.ServiceInterface, logger *slog.Logger) *Server {
@@ -34,7 +34,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 				c.Status(400)
 				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный tag_id"}))
 				return
-			}	
+			}
 		} else {
 			tag_id = -1
 		}
@@ -45,7 +45,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 				c.Status(400)
 				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
 				return
-			}	
+			}
 		} else {
 			feature_id = -1
 		}
@@ -56,18 +56,18 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 				c.Status(400)
 				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный limit"}))
 				return
-			}	
+			}
 		} else {
-			limit = -1
+			limit = 0
 		}
 		offset_str := c.Query("offset")
 		if len(offset_str) > 0 {
 			offset, err = strconv.Atoi(offset_str)
-			if err != nil || offset < 0  {
+			if err != nil || offset < 0 {
 				c.Status(400)
 				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный offset"}))
 				return
-			}	
+			}
 		} else {
 			offset = 0
 		}
@@ -123,7 +123,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 			return
 		}
 		err = s.Service.UpdateBanner(id, data)
-		if err.Error() == "404" {
+		if err != nil && err.Error() == "404" {
 			c.Status(404)
 			return
 		}
@@ -155,7 +155,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		c.Writer.Write(ans)
 	}
 	UserBannerGet := func(c *gin.Context) {
-		if ok := s.CheckPermission(c, 1); !ok {
+		if ok := s.CheckPermission(c, 3); !ok {
 			return
 		}
 		tag_id_str := c.Query("tag_id")
@@ -185,13 +185,13 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		default:
 			c.Status(400)
 			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный use_last_revision"}))
-			return	
+			return
 		}
-		data, err := s.Service.GetUserBanner(tag_id, feature_id, use_last_revision)
+		data, err := s.Service.GetUserBanner(tag_id, feature_id, use_last_revision, c.Request.Header.Get("token"))
 		if err != nil {
 			c.Status(500)
 			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
-			return	
+			return
 		}
 		if len(data) == 0 {
 			c.Status(404)
@@ -201,14 +201,19 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		c.Status(200)
 		c.Writer.Write(data)
 	}
-	
-	g := gin.Default()
+	ping := func(c *gin.Context) {
+		c.Status(200)
+	}
+	g := gin.New()
+
 	g.GET("/user_banner", UserBannerGet)
 	g.GET("/banner", BannerGet)
 	g.POST("/banner", BannerPost)
 	g.PATCH("/banner/:id", BannerIdPatch)
 	g.DELETE("/banner/:id", BannerIdDelete)
+	g.GET("/ping", ping)
 	s.Router = g
+	s.adres = host + ":" + port
 	return &s
 }
 
@@ -217,6 +222,15 @@ func (s *Server) CheckPermission(c *gin.Context, permission int) bool {
 	if token == "" {
 		c.Status(401)
 		return false
+	}
+	if permission == 3 {
+		ok, err := s.Auth.HasPermission(token, 1)
+		if !ok && err.Error() == "401" {
+			c.Status(401)
+			return false
+		} else {
+			return true
+		}
 	}
 	ok, err := s.Auth.HasPermission(token, permission)
 	if ok {
@@ -237,5 +251,5 @@ func (s *Server) CheckPermission(c *gin.Context, permission int) bool {
 }
 
 func (s *Server) Run() {
-	s.Router.Run()
+	s.Router.Run(s.adres)
 }
