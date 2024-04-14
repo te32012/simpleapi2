@@ -62,7 +62,7 @@ func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, er
 		} else {
 			count += 1
 			rows.Close()
-			db.Logger.Error("ошибка получения баннера " + err.Error())
+			db.Logger.Error("ошибка получения баннера ")
 			continue
 		}
 		rows.Close()
