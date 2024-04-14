@@ -1,3 +1,6 @@
+[![builded](https://github.com/te32012/simpleapi2/actions/workflows/docker-image.yml/badge.svg)](https://github.com/te32012/simpleapi2/actions/workflows/docker-image.yml)
+
+
 Для запуска необходимо:
 1) git clone пакет 
 2) make compose-build
