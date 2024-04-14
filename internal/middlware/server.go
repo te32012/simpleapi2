@@ -32,7 +32,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 			tag_id, err = strconv.Atoi(tag_id_str)
 			if err != nil || tag_id < 0 {
 				c.Status(400)
-				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный tag_id"}))
+				_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный tag_id"}))
 				return
 			}
 		} else {
@@ -43,7 +43,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		if len(feature_id_str) > 0 {
 			if err != nil || feature_id < 0 {
 				c.Status(400)
-				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
+				_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
 				return
 			}
 		} else {
@@ -54,7 +54,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 			limit, err = strconv.Atoi(limit_str)
 			if err != nil || limit <= 0 {
 				c.Status(400)
-				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный limit"}))
+				_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный limit"}))
 				return
 			}
 		} else {
@@ -65,7 +65,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 			offset, err = strconv.Atoi(offset_str)
 			if err != nil || offset < 0 {
 				c.Status(400)
-				c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный offset"}))
+				_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный offset"}))
 				return
 			}
 		} else {
@@ -74,12 +74,12 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		ans, err := s.Service.GetAllBanners(tag_id, feature_id, limit, offset)
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		c.Status(200)
 		c.Header("Content-Type", "application/json; charset=UTF-8")
-		c.Writer.Write(ans)
+		_, _ = c.Writer.Write(ans)
 	}
 	BannerIdDelete := func(c *gin.Context) {
 		if ok := s.CheckPermission(c, 2); !ok {
@@ -89,17 +89,17 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		id, err := strconv.Atoi(id_str)
 		if err != nil || id < 0 {
 			c.Status(400)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный id"}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный id"}))
 			return
 		}
 		err = s.Service.Delete(id)
-		if err.Error() == "404" {
+		if err != nil && err.Error() == "404" {
 			c.Status(404)
 			return
 		}
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		c.Status(204)
@@ -112,14 +112,14 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		id, err := strconv.Atoi(id_str)
 		if err != nil || id < 0 {
 			c.Status(400)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный id"}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный id"}))
 			return
 		}
 
 		data, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		err = s.Service.UpdateBanner(id, data)
@@ -129,7 +129,7 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		}
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		c.Status(200)
@@ -141,18 +141,18 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		data, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		ans, err := s.Service.CreateBanner(data)
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		c.Header("Content-Type", "application/json; charset=UTF-8")
 		c.Status(201)
-		c.Writer.Write(ans)
+		_, _ = c.Writer.Write(ans)
 	}
 	UserBannerGet := func(c *gin.Context) {
 		if ok := s.CheckPermission(c, 3); !ok {
@@ -162,14 +162,14 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		tag_id, err := strconv.Atoi(tag_id_str)
 		if err != nil || tag_id < 0 {
 			c.Status(400)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный tag_id"}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный tag_id"}))
 			return
 		}
 		feature_id_str := c.Query("feature_id")
 		feature_id, err := strconv.Atoi(feature_id_str)
 		if err != nil || feature_id < 0 {
 			c.Status(400)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
 			return
 		}
 		use_last_revision_str := c.Query("use_last_revision")
@@ -177,20 +177,23 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		switch use_last_revision_str {
 		case "true":
 			use_last_revision = true
-			break
 		case "false":
 			break
 		case "":
 			break
 		default:
 			c.Status(400)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный use_last_revision"}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный use_last_revision"}))
 			return
 		}
 		data, err := s.Service.GetUserBanner(tag_id, feature_id, use_last_revision, c.Request.Header.Get("token"))
+		if err != nil && err.Error() == "404" {
+			c.Status(404)
+			return
+		}
 		if err != nil {
 			c.Status(500)
-			c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
 			return
 		}
 		if len(data) == 0 {
@@ -199,11 +202,49 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 		}
 		c.Header("Content-Type", "application/json; charset=UTF-8")
 		c.Status(200)
-		c.Writer.Write(data)
+		_, _ = c.Writer.Write(data)
+	}
+	UserBannerGetThreeVersion := func(c *gin.Context) {
+		if ok := s.CheckPermission(c, 3); !ok {
+			return
+		}
+		id_str := c.Param("feature_id")
+		id, err := strconv.Atoi(id_str)
+		if err != nil || id < 0 {
+			c.Status(400)
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный id"}))
+			return
+		}
+		data, err := s.Service.GetUserBannerThreeVersion(id, c.Request.Header.Get("token"))
+		if err != nil && err.Error() == "404" {
+			c.Status(404)
+			return
+		}
+		if err != nil {
+			c.Status(500)
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()}))
+			return
+		}
+		c.Header("Content-Type", "application/json; charset=UTF-8")
+		c.Status(200)
+		_, _ = c.Writer.Write(data)
+
 	}
 	ping := func(c *gin.Context) {
 		c.Status(200)
 	}
+	deleteByFuture := func(c *gin.Context) {
+		id_str := c.Param("feature_id")
+		id, err := strconv.Atoi(id_str)
+		if err != nil || id < 0 {
+			c.Status(400)
+			_, _ = c.Writer.Write(s.Service.CovertErrorToBytes(entitys.Error{Message: "не корректный feature_id"}))
+			return
+		}
+		service.DeleteByFuture(id)
+		c.Status(200)
+	}
+
 	g := gin.New()
 
 	g.GET("/user_banner", UserBannerGet)
@@ -212,6 +253,8 @@ func NewServer(host string, port string, auth auth.AuthInterface, service servic
 	g.PATCH("/banner/:id", BannerIdPatch)
 	g.DELETE("/banner/:id", BannerIdDelete)
 	g.GET("/ping", ping)
+	g.GET("/banner3/:feature_id", UserBannerGetThreeVersion)
+	g.DELETE("/future/:feature_id", deleteByFuture)
 	s.Router = g
 	s.adres = host + ":" + port
 	return &s
@@ -246,10 +289,10 @@ func (s *Server) CheckPermission(c *gin.Context, permission int) bool {
 	}
 	c.Status(500)
 	data := s.Service.CovertErrorToBytes(entitys.Error{Message: err.Error()})
-	c.Writer.Write(data)
+	_, _ = c.Writer.Write(data)
 	return false
 }
 
 func (s *Server) Run() {
-	s.Router.Run(s.adres)
+	_ = s.Router.Run(s.adres)
 }

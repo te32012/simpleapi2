@@ -21,27 +21,27 @@ func TestUseApplicationOne(t *testing.T) {
 	ban.Tag_ids = append(ban.Tag_ids, 23)
 	ban.Tag_ids = append(ban.Tag_ids, 24)
 
-	reqBody, err := easyjson.Marshal(ban)
-	req, err := http.NewRequest("POST", "http://application:2024/banner", bytes.NewBuffer(reqBody))
+	reqBody, _ := easyjson.Marshal(ban)
+	req, _ := http.NewRequest("POST", "http://application:2024/banner", bytes.NewBuffer(reqBody))
 	req.Header.Set("token", "admin")
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != 201 {
 		t.Fatalf("Error making request: %v", err)
 	}
-	data, err := io.ReadAll(resp.Body)
+	data, _ := io.ReadAll(resp.Body)
 	var id entitys.Ans201
 	err = easyjson.Unmarshal(data, &id)
 	if err != nil {
 		t.Fatalf("Error unmarshal: %v", err)
 	}
-	req, err = http.NewRequest("GET", "http://application:2024/user_banner", nil)
+	req, _ = http.NewRequest("GET", "http://application:2024/user_banner", nil)
 	req.Header.Set("token", "user")
 	q := req.URL.Query()
 	q.Set("tag_id", "23")
 	q.Set("feature_id", "10")
 	q.Set("use_last_revision", "true")
 	req.URL.RawQuery = q.Encode()
-	resp, err = client.Do(req)
+	resp, _ = client.Do(req)
 	// Проверяем статус код ответа
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -59,14 +59,14 @@ func TestUseApplicationOne(t *testing.T) {
 	}
 	ban.Is_active = false
 	ban.Tag_ids = append(ban.Tag_ids, 25)
-	reqBody, err = easyjson.Marshal(&ban)
-	req, err = http.NewRequest("PATCH", "http://application:2024/banner/"+strconv.Itoa(id.Id), bytes.NewBuffer(reqBody))
+	reqBody, _ = easyjson.Marshal(&ban)
+	req, _ = http.NewRequest("PATCH", "http://application:2024/banner/"+strconv.Itoa(id.Id), bytes.NewBuffer(reqBody))
 	req.Header.Set("token", "admin")
-	resp, err = client.Do(req)
+	resp, _ = client.Do(req)
 	if resp.StatusCode != 200 {
 		t.Fatalf("Error get banner: %v", resp.StatusCode)
 	}
-	req, err = http.NewRequest("GET", "http://application:2024/banner", nil)
+	req, _ = http.NewRequest("GET", "http://application:2024/banner", nil)
 	req.Header.Set("token", "admin")
 	q = req.URL.Query()
 	q.Set("tag_id", "25")
@@ -77,11 +77,43 @@ func TestUseApplicationOne(t *testing.T) {
 	}
 	var banners entitys.Banners
 	data, _ = io.ReadAll(resp.Body)
-	easyjson.Unmarshal(data, &banners)
+	_ = easyjson.Unmarshal(data, &banners)
 	if len(banners) != 1 {
 		t.Fatalf("Error status answer banner: %d", len(banners))
 	}
 	if banners[0].Feature_ids != 10 {
 		t.Fatalf("Error status answer banner: %d", banners[0].Feature_ids)
 	}
+	req, _ = http.NewRequest("GET", "http://application:2024/banner3/"+strconv.Itoa(id.Id), nil)
+	req.Header.Set("token", "admin")
+	resp, _ = client.Do(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("Error status get banners: %d", resp.StatusCode)
+	}
+	var bns entitys.Banners
+	data, _ = io.ReadAll(resp.Body)
+	_ = easyjson.Unmarshal(data, &bns)
+	if len(bns) != 2 {
+		t.Fatalf("Error len get banners: %d", len(bns))
+
+	}
+	req, _ = http.NewRequest("DELETE", "http://application:2024/banner/"+strconv.Itoa(id.Id), nil)
+	req.Header.Set("token", "admin")
+	resp, _ = client.Do(req)
+	if resp.StatusCode != 204 {
+		t.Fatalf("Error status delete banner: %d", resp.StatusCode)
+	}
+	req, _ = http.NewRequest("GET", "http://application:2024/user_banner", nil)
+	req.Header.Set("token", "user")
+	q = req.URL.Query()
+	q.Set("tag_id", "23")
+	q.Set("feature_id", "10")
+	q.Set("use_last_revision", "true")
+	req.URL.RawQuery = q.Encode()
+	resp, _ = client.Do(req)
+	// Проверяем статус код ответа
+	if resp.StatusCode != 404 {
+		t.Fatalf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
 }

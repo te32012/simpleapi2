@@ -8,6 +8,7 @@ type DatabaseInterface interface {
 	GetListBannerByTagAndFutureIdWithOffsetAndLimit(tag_id, future_id, offset, limit int) (baners entitys.Banners, err error)
 	UpdateBannerById(bannerWithId *entitys.Banner) error
 	DeleteBannerById(id int) error
-	DeleteBannerByFutureId(future_id int) error
+	DeleteBannerByFutureId(future_id int)
 	CreateBanner(bannerWithoutId *entitys.Banner) (banner_id int, err error)
+	GetThreeVersionBannerById(id int) (baners entitys.Banners, err error)
 }

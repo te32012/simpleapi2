@@ -47,6 +47,12 @@ func Run() {
 	service := service.NewService(base, slog.Default(), auth)
 	middlvare := middlware.NewServer("application", "2024", auth, service, slog.Default())
 	go func() {
+		for {
+			tmp := <-base.Thread
+			base.DeleteBannerByFutureId(tmp)
+		}
+	}()
+	go func() {
 		slog.Info("starting router")
 		middlvare.Run()
 		slog.Info("stop router")

@@ -37,21 +37,26 @@ func (s *Service) GetUserBanner(tag_id, feature_id int, use_last_revission bool,
 			return ans, nil
 		}
 	}
-	banner, err := s.MainBase.GetBannerByTagIdAndFutureId(tag_id, feature_id)
-	if err != nil {
-		return nil, err
+	banner, errr := s.MainBase.GetBannerByTagIdAndFutureId(tag_id, feature_id)
+	if errr != nil {
+		err = errr
+		ans = make([]byte, 0)
+		return ans, err
 	}
 	if banner != nil {
+		s.Cash.Used(banner.Id)
 		if banner.Is_active {
 			ans, err = easyjson.Marshal(banner.Content)
 		} else if ok, _ := s.Auth.HasPermission(token, 2); ok {
 			ans, err = easyjson.Marshal(banner.Content)
 		} else {
 			err = errors.New("404")
+			ans = make([]byte, 0)
 			return
 		}
 	} else {
 		err = errors.New("404")
+		ans = make([]byte, 0)
 		return
 	}
 	s.Logger.Info("статус получения банера ok")
@@ -89,13 +94,14 @@ func (s *Service) CreateBanner(banner []byte) (ans []byte, err error) {
 	}
 	ans, err = easyjson.Marshal(&entitys.Ans201{Id: id})
 	s.Logger.Info("Был создан баннер с id = " + strconv.Itoa(id))
-
+	s.Cash.Used(id)
 	return
 }
 
 func (s *Service) UpdateBanner(id int, banner []byte) (err error) {
 	s.Logger.Info("Обновляем банер с id = " + strconv.Itoa(id))
 	var bannerJSON *entitys.Banner = new(entitys.Banner)
+	s.Cash.Used(id)
 	err = easyjson.Unmarshal(banner, bannerJSON)
 	if err != nil {
 		s.Logger.Error("Ошибка конвертации в структуру банера с id = " + strconv.Itoa(id))
@@ -112,4 +118,33 @@ func (s *Service) Delete(id int) (err error) {
 	err = s.MainBase.DeleteBannerById(id)
 	s.Logger.Info("удаление банера с id = " + strconv.Itoa(id))
 	return
+}
+
+func (s *Service) GetUserBannerThreeVersion(id int, token string) (ans []byte, err error) {
+	s.Logger.Info("Получение 3х версий банеров по id = " + strconv.Itoa(id) + " token = " + token)
+	banners, err := s.MainBase.GetThreeVersionBannerById(id)
+	s.Cash.Used(id)
+	if err != nil {
+		return
+	}
+	if ok, _ := s.Auth.HasPermission(token, 2); ok {
+		data, _ := easyjson.Marshal(banners)
+		ans = data
+		return
+	}
+	var tmp entitys.Banners
+	for i := 0; i < len(banners); i++ {
+		if banners[i].Is_active {
+			tmp = append(tmp, banners[i])
+		}
+	}
+	if len(tmp) == 0 {
+		err = errors.New("404")
+	}
+	data, _ := easyjson.Marshal(tmp)
+	ans = data
+	return
+}
+func (s *Service) DeleteByFuture(future_id int) {
+	s.MainBase.(*database.Database).Thread <- future_id
 }

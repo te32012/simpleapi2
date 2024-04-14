@@ -9,4 +9,6 @@ type ServiceInterface interface {
 	CreateBanner(banner []byte) (ans []byte, err error)
 	UpdateBanner(id int, banner []byte) (err error)
 	Delete(id int) (err error)
+	GetUserBannerThreeVersion(id int, token string) (ans []byte, err error)
+	DeleteByFuture(future_id int)
 }

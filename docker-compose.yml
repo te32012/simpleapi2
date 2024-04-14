@@ -60,15 +60,15 @@ services:
       interval: 3s
       timeout: 3s
       retries: 5
-  tests:
-    container_name: runs_tests
-    hostname: runs_tests
-    build:
-      context: .
-      dockerfile: ./internal/application/dockerfile
-    depends_on:
-      application:
-        condition: service_healthy
+#  tests:
+#    container_name: runs_tests
+#    hostname: runs_tests
+#    build:
+#      context: .
+#      dockerfile: ./internal/application/dockerfile
+#    depends_on:
+#      application:
+#        condition: service_healthy
   pgadm:
     container_name: pgadmin4_container
     image: dpage/pgadmin4:7

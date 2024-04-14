@@ -23,10 +23,11 @@ import (
 type Database struct {
 	Pool   *pgxpool.Pool
 	Logger *slog.Logger
+	Thread chan int
 }
 
 func NewDatabase(pool *pgxpool.Pool, logger *slog.Logger) *Database {
-	return &Database{Pool: pool, Logger: logger}
+	return &Database{Pool: pool, Logger: logger, Thread: make(chan int, 10000)}
 }
 
 func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, err error) {
@@ -36,7 +37,9 @@ func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, er
 		return
 	}
 	var count int
-	defer tx.Rollback(context.Background())
+	defer func() {
+		_ = tx.Rollback(context.Background())
+	}()
 	for i := 0; i < len(id); i++ {
 		db.Logger.Info("пытаемся достать из базы  " + strconv.Itoa(id[i]) + " банер")
 		var banner entitys.Banner
@@ -54,8 +57,8 @@ func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, er
 		}
 		if rows.Next() {
 			var tmp []byte
-			rows.Scan(&tmp, &banner.Updatet_at, &banner.Is_active, &banner.Created_at, &banner.Feature_ids)
-			easyjson.Unmarshal(tmp, &banner.Content)
+			_ = rows.Scan(&tmp, &banner.Updatet_at, &banner.Is_active, &banner.Created_at, &banner.Feature_ids)
+			_ = easyjson.Unmarshal(tmp, &banner.Content)
 		} else {
 			count += 1
 			rows.Close()
@@ -73,7 +76,7 @@ func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, er
 		var id_tags []int
 		for rows.Next() {
 			var tmp int
-			rows.Scan(&tmp)
+			_ = rows.Scan(&tmp)
 			id_tags = append(id_tags, tmp)
 		}
 		banner.Tag_ids = id_tags
@@ -85,7 +88,7 @@ func (db *Database) GetListBannersByListId(id []int) (baners entitys.Banners, er
 		err = errors.New("в базе не смогли найти " + strconv.Itoa(count) + " баннеров")
 	}
 	db.Logger.Info("достали из базы  " + strconv.Itoa(len(id)-count) + " банеров")
-	db.Logger.Info(fmt.Sprintf("%s", baners))
+	db.Logger.Info(fmt.Sprintf("%+v", baners))
 	return
 }
 
@@ -97,7 +100,9 @@ func (db *Database) GetBannerByTagIdAndFutureId(tag_id int, future_id int) (bane
 	select features_banner.id_banner from features_banner join (select tags_banner.id_banner from tags_banner where id_tag = $1) as first_query on first_query.id_banner = features_banner.id_banner where features_banner.id_future = $2;;
 	`
 	tx, err := db.Pool.Begin(context.Background())
-	defer tx.Rollback(context.Background())
+	defer func() {
+		_ = tx.Rollback(context.Background())
+	}()
 	if err != nil {
 		db.Logger.Error("ошибка получения баннера " + err.Error())
 		return
@@ -108,7 +113,7 @@ func (db *Database) GetBannerByTagIdAndFutureId(tag_id int, future_id int) (bane
 		return
 	}
 	if rows.Next() {
-		rows.Scan(&baner.Id)
+		_ = rows.Scan(&baner.Id)
 	} else {
 		err = errors.New("404")
 		db.Logger.Error("ошибка получения баннера " + err.Error())
@@ -126,7 +131,7 @@ func (db *Database) GetBannerByTagIdAndFutureId(tag_id int, future_id int) (bane
 	var tags_id []int
 	for rows.Next() {
 		var tmp int
-		rows.Scan(&tmp)
+		_ = rows.Scan(&tmp)
 		tags_id = append(tags_id, tmp)
 	}
 	db.Logger.Info("загрузили теги")
@@ -139,7 +144,7 @@ func (db *Database) GetBannerByTagIdAndFutureId(tag_id int, future_id int) (bane
 		return
 	}
 	if rows.Next() {
-		rows.Scan(&baner.Created_at)
+		_ = rows.Scan(&baner.Created_at)
 	} else {
 		err = errors.New("404")
 		db.Logger.Error("ошибка получения баннера " + err.Error())
@@ -157,20 +162,19 @@ func (db *Database) GetBannerByTagIdAndFutureId(tag_id int, future_id int) (bane
 	}
 	if rows.Next() {
 		var tmp []byte
-		rows.Scan(&tmp, &baner.Updatet_at, &baner.Is_active)
-		easyjson.Unmarshal(tmp, &baner.Content)
+		_ = rows.Scan(&tmp, &baner.Updatet_at, &baner.Is_active)
+		_ = easyjson.Unmarshal(tmp, &baner.Content)
 	} else {
 		err = errors.New("404")
 		db.Logger.Error("ошибка получения баннера " + err.Error())
 		return
 	}
 	db.Logger.Info("загрузили основные данные")
-	db.Logger.Info("баннер " + fmt.Sprintf("%s", baner.Content.Text))
+	db.Logger.Info("баннер " + baner.Content.Text)
 	rows.Close()
 	return
 }
 
-// переписать!!!
 func (db *Database) GetListBannerByTagAndFutureIdWithOffsetAndLimit(tag_id, future_id, offset, limit int) (baners entitys.Banners, err error) {
 	// возможно быстрее через джоин
 	q := `select distinct tags_banner.id_banner from tags_banner join (select id_banner from features_banner where id_future = $1 or $1<=0 ) as first_query on first_query.id_banner = tags_banner.id_banner where tags_banner.id_tag = $2 or $2 <= 0 order by tags_banner.id_banner desc LIMIT all offset $3;
@@ -181,7 +185,9 @@ func (db *Database) GetListBannerByTagAndFutureIdWithOffsetAndLimit(tag_id, futu
 		db.Logger.Error("ошибка получения всех баннеров по шаблону " + err.Error())
 		return
 	}
-	defer tx.Rollback(context.Background())
+	defer func() {
+		_ = tx.Rollback(context.Background())
+	}()
 	rows, err := tx.Query(context.Background(), q, future_id, tag_id, offset)
 	if err != nil {
 		db.Logger.Error("ошибка получения всех баннеров по шаблону " + err.Error())
@@ -190,7 +196,7 @@ func (db *Database) GetListBannerByTagAndFutureIdWithOffsetAndLimit(tag_id, futu
 	var ids []int
 	for (len(ids) < limit-offset || limit == 0) && rows.Next() {
 		var tmp int
-		rows.Scan(&tmp)
+		_ = rows.Scan(&tmp)
 		ids = append(ids, tmp)
 	}
 	rows.Close()
@@ -202,46 +208,46 @@ func (db *Database) UpdateBannerById(bannerWithId *entitys.Banner) (err error) {
 	q := "select id_banner from banner where id_banner=$1;"
 	tx, err := db.Pool.Begin(context.Background())
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	rows, err := tx.Query(context.Background(), q, bannerWithId.Id)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	if rows.Next() {
 		var tmp int
-		rows.Scan(&tmp)
+		_ = rows.Scan(&tmp)
 		rows.Close()
 	} else {
 		rows.Close()
 		err = errors.New("404")
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	q = "insert into version_banner(id_banner, content, updated_at, is_active) values ($1, $2, $3, $4) returning id_version;"
 	data, err := easyjson.Marshal(bannerWithId.Content)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	var t time.Time = time.Now()
 	rows, err = tx.Query(context.Background(), q, bannerWithId.Id, data, t, bannerWithId.Is_active)
 	// вставляем новую версию!!
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	var version int
 	if rows.Next() {
-		rows.Scan(&version)
+		_ = rows.Scan(&version)
 	}
 	rows.Close()
 	q = "insert into features_banner(id_version, id_future, id_banner) values ($1, $2, $3);"
 	rows, err = tx.Query(context.Background(), q, version, bannerWithId.Feature_ids, bannerWithId.Id)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	rows.Close()
@@ -249,12 +255,12 @@ func (db *Database) UpdateBannerById(bannerWithId *entitys.Banner) (err error) {
 	for i := 0; i < len(bannerWithId.Tag_ids); i++ {
 		rows, err = tx.Query(context.Background(), q, version, bannerWithId.Tag_ids[i], bannerWithId.Id)
 		if err != nil {
-			tx.Rollback(context.Background())
+			_ = tx.Rollback(context.Background())
 			return
 		}
 		rows.Close()
 	}
-	tx.Commit(context.Background())
+	_ = tx.Commit(context.Background())
 	return
 }
 
@@ -265,15 +271,15 @@ func (db *Database) DeleteBannerById(id int) (err error) {
 	}
 	err = del(id, tx)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	} else {
-		tx.Commit(context.Background())
+		_ = tx.Commit(context.Background())
 		return
 	}
 }
 
-func (db *Database) DeleteBannerByFutureId(future_id int) (err error) {
+func (db *Database) DeleteBannerByFutureId(future_id int) {
 	q := "select id_banner from features_banner where id_future=$1;"
 	tx, err := db.Pool.Begin(context.Background())
 	if err != nil {
@@ -286,19 +292,18 @@ func (db *Database) DeleteBannerByFutureId(future_id int) (err error) {
 	var ids []int
 	for rows.Next() {
 		var tmp int
-		rows.Scan(&tmp)
+		_ = rows.Scan(&tmp)
 		ids = append(ids, tmp)
 	}
 	rows.Close()
 	for i := 0; i < len(ids); i++ {
 		err = del(ids[i], tx)
 		if err != nil {
-			tx.Rollback(context.Background())
+			_ = tx.Rollback(context.Background())
 			return
 		}
 	}
-	tx.Commit(context.Background())
-	return
+	_ = tx.Commit(context.Background())
 }
 
 func (db *Database) CreateBanner(bannerWithoutId *entitys.Banner) (banner_id int, err error) {
@@ -310,35 +315,35 @@ func (db *Database) CreateBanner(bannerWithoutId *entitys.Banner) (banner_id int
 	t := time.Now()
 	rows, err := tx.Query(context.Background(), q, t)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	if rows.Next() {
-		rows.Scan(&bannerWithoutId.Id)
+		_ = rows.Scan(&bannerWithoutId.Id)
 	}
 	banner_id = bannerWithoutId.Id
 	rows.Close()
 	q = "insert into version_banner(id_banner, content, updated_at, is_active) values ($1, $2, $3, $4) returning id_version;"
 	data, err := easyjson.Marshal(bannerWithoutId.Content)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	rows, err = tx.Query(context.Background(), q, bannerWithoutId.Id, data, t, bannerWithoutId.Is_active)
 	// вставляем новую версию!!
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	var version int
 	if rows.Next() {
-		rows.Scan(&version)
+		_ = rows.Scan(&version)
 	}
 	rows.Close()
 	q = "insert into features_banner(id_version, id_future, id_banner) values ($1, $2, $3);"
 	rows, err = tx.Query(context.Background(), q, version, bannerWithoutId.Feature_ids, bannerWithoutId.Id)
 	if err != nil {
-		tx.Rollback(context.Background())
+		_ = tx.Rollback(context.Background())
 		return
 	}
 	rows.Close()
@@ -346,39 +351,103 @@ func (db *Database) CreateBanner(bannerWithoutId *entitys.Banner) (banner_id int
 	for i := 0; i < len(bannerWithoutId.Tag_ids); i++ {
 		rows, err = tx.Query(context.Background(), q, version, bannerWithoutId.Tag_ids[i], bannerWithoutId.Id)
 		if err != nil {
-			tx.Rollback(context.Background())
+			_ = tx.Rollback(context.Background())
 			return
 		}
 		rows.Close()
 	}
-	tx.Commit(context.Background())
+	_ = tx.Commit(context.Background())
 	return
 }
 
 func del(id int, tx pgx.Tx) (err error) {
 	q := "delete from features_banner where id_banner=$1;"
-	_, err = tx.Query(context.Background(), q, id)
-	if err != nil {
-		return
-	}
-	q = "delete from tags_banner where id_banner=$1;"
-	_, err = tx.Query(context.Background(), q, id)
-	if err != nil {
-		return
-	}
-	q = "delete from version_banner where id_banner=$1;"
-	_, err = tx.Query(context.Background(), q, id)
-	if err != nil {
-		return
-	}
-	q = "delete from banner where banner=$1;"
 	rows, err := tx.Query(context.Background(), q, id)
 	if err != nil {
 		return
 	}
-	if !rows.Next() {
-		err = errors.New("404")
+	rows.Close()
+	q = "delete from tags_banner where id_banner=$1;"
+	rows, err = tx.Query(context.Background(), q, id)
+	if err != nil {
+		return
 	}
 	rows.Close()
+	q = "delete from version_banner where id_banner=$1;"
+	rows, err = tx.Query(context.Background(), q, id)
+	if err != nil {
+		return
+	}
+	rows.Close()
+	q = "delete from banner where id_banner=$1;"
+	rows, err = tx.Query(context.Background(), q, id)
+	if err != nil {
+		return
+	}
+	rows.Close()
+	return
+}
+
+func (db *Database) GetThreeVersionBannerById(id int) (baners entitys.Banners, err error) {
+	tx, err := db.Pool.Begin(context.Background())
+	if err != nil {
+		db.Logger.Error("ошибка получения трех баннеров по шаблону " + err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback(context.Background())
+	}()
+	var created time.Time
+	q := "select created_at from banner where id_banner=$1;"
+	rows, err := tx.Query(context.Background(), q, id)
+	if err != nil {
+		return
+	}
+	if rows.Next() {
+		_ = rows.Scan(&created)
+	} else {
+		err = errors.New("404")
+		rows.Close()
+		return
+	}
+	rows.Close()
+	q = "select id_version, id_banner, content, updated_at, is_active from version_banner where id_banner=$1 order by updated_at DESC limit 3;"
+	rows, err = tx.Query(context.Background(), q, id)
+	if err != nil {
+		return
+	}
+	var versions []int
+	for rows.Next() {
+		var banner entitys.Banner
+		banner.Created_at = created
+		var tmp int
+		var tmp1 []byte
+		_ = rows.Scan(&tmp, &banner.Id, &tmp1, &banner.Updatet_at, &banner.Is_active)
+		_ = easyjson.Unmarshal(tmp1, &banner.Content)
+		versions = append(versions, tmp)
+		baners = append(baners, banner)
+	}
+	rows.Close()
+	for i := 0; i < len(versions); i++ {
+		q = "select id_tag from tags_banner where id_version=$1;"
+		rows, err = tx.Query(context.Background(), q, versions[i])
+		var tags []int
+		for rows.Next() {
+			var tmp int
+			_ = rows.Scan(&tmp)
+			tags = append(tags, tmp)
+		}
+		baners[i].Tag_ids = tags
+		rows.Close()
+		q = "select id_future from features_banner where id_version=$1;"
+		rows, err = tx.Query(context.Background(), q, versions[i])
+		var future int
+		for rows.Next() {
+			_ = rows.Scan(&future)
+		}
+		baners[i].Feature_ids = future
+		rows.Close()
+	}
+	db.Logger.Info(fmt.Sprintf("%+v", baners))
 	return
 }
